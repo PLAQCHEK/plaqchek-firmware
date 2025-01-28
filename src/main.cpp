@@ -10,7 +10,7 @@
 /* SPI */
 #define SPI_CS D10	// SPI Chip Select
 
-const u_int spi_clk_rate = 100*10^6;	// Clock Rate
+const u_int spi_clk_rate = 1*10^6;	// Clock Rate (100 MHz, but test with 1 MHz)
 const SPISettings adc_settings = SPISettings(spi_clk_rate, MSBFIRST, SPI_MODE0);	// SPI Settings
 
 /* I2C */
@@ -33,6 +33,8 @@ const SPISettings adc_settings = SPISettings(spi_clk_rate, MSBFIRST, SPI_MODE0);
 /* BLE */
 #define SERVICE_UUID "42bce946-ada2-4607-9d2f-71ec54c0cdf4"			// Service UUID
 #define CHARACTERISTIC_UUID "820fc77c-e787-4103-a731-3937e965bc95"	// Characteristic UUID
+#define DEVICE_NAME "PLAQCHEK"	// Device Name to use on BLE connection
+#define DEVICE_DESC "PLAQCHEK Heart Risk Detector"
 
 void setup() {
 	// Launch MSG
@@ -43,9 +45,9 @@ void setup() {
 	Wire.begin();
 
 	// Setup SPI
-	SPI.begin();
 	pinMode(SPI_CS, OUTPUT);
-	SPI.beginTransaction(adc_settings);
+	digitalWrite(SPI_CS, LOW);
+	SPI.begin();
 
 	// Setup LED
 	pinMode(LED_1, OUTPUT);
@@ -62,7 +64,7 @@ void setup() {
 	analogWrite(PD_PIN, 4095);
 
 	// Setup BLE
-	BLEDevice::init("PLAQCHEK");
+	BLEDevice::init(DEVICE_NAME);
 	BLEServer *pServer = BLEDevice::createServer();
 	BLEService *pService = pServer->createService(SERVICE_UUID);
 	BLECharacteristic *pCharacteristic = pService->createCharacteristic(
@@ -70,11 +72,10 @@ void setup() {
 											BLECharacteristic::PROPERTY_READ |
 											BLECharacteristic::PROPERTY_WRITE
 										);
-
-	pCharacteristic->setValue("Hello World");
+	pCharacteristic->setValue(DEVICE_DESC);
 	pService->start();
 
-	// This still is working for backward compatibility
+	// Start Advertising
 	BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
 	pAdvertising->addServiceUUID(SERVICE_UUID);
 	pAdvertising->setScanResponse(true);
@@ -86,4 +87,22 @@ void setup() {
 
 void loop() {
 	delay(2000);
+	Serial.println(read_adc());
 }
+
+// ADC Functions
+uint16_t read_adc() {
+	digitalWrite(SPI_CS, HIGH);				// Enable the chip
+	SPI.beginTransaction(adc_settings); 	// Small delay for stability
+
+	// Send 16 clock cycles to read ADC data
+	uint8_t highByte = SPI.transfer(0x00);  // Read MSB
+	uint8_t lowByte = SPI.transfer(0x00);   // Read LSB
+
+	SPI.endTransaction();
+	digitalWrite(SPI_CS, LOW); // Disable the chip
+	
+	// Combine MSB and LSB
+	return (highByte << 8) | lowByte;
+}
+
