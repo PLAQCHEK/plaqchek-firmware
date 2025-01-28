@@ -85,11 +85,6 @@ void setup() {
 	Serial.println("Characteristic defined! Now you can read it in your phone!");
 }
 
-void loop() {
-	delay(2000);
-	Serial.println(read_adc());
-}
-
 // ADC Functions
 uint16_t read_adc() {
 	digitalWrite(SPI_CS, HIGH);				// Enable the chip
@@ -106,3 +101,8 @@ uint16_t read_adc() {
 	return (highByte << 8) | lowByte;
 }
 
+void loop() {
+	delay(2000);
+	uint16_t bit = read_adc();
+	Serial.printf("ADC Bit: %d", bit);
+}
