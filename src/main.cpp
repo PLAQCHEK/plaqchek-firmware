@@ -34,6 +34,15 @@ const SPISettings adc_settings = SPISettings(spi_clk_rate, MSBFIRST, SPI_MODE0);
 #define SERVICE_UUID "42bce946-ada2-4607-9d2f-71ec54c0cdf4"			// Service UUID
 #define CHARACTERISTIC_UUID "820fc77c-e787-4103-a731-3937e965bc95"	// Characteristic UUID
 
+class BLECallback : public BLEServerCallbacks {
+	void onConnect(BLEServer* pServer) {
+		Serial.println("Device Connected!");
+	}
+	void onDisconnect(BLEServer* pServer) {
+		Serial.println("Device Disconnected!");
+	}
+};
+
 void setup() {
 	// Launch MSG
 	Serial.begin(9600);
@@ -64,6 +73,8 @@ void setup() {
 	// Setup BLE
 	BLEDevice::init("PLAQCHEK");
 	BLEServer *pServer = BLEDevice::createServer();
+	pServer->setCallbacks(new BLECallback());
+
 	BLEService *pService = pServer->createService(SERVICE_UUID);
 	BLECharacteristic *pCharacteristic = pService->createCharacteristic(
 											CHARACTERISTIC_UUID,
@@ -79,7 +90,7 @@ void setup() {
 	pAdvertising->addServiceUUID(SERVICE_UUID);
 	pAdvertising->setScanResponse(true);
 	pAdvertising->setMinPreferred(0x06);  // functions that help with iPhone connections issue
-	pAdvertising->setMinPreferred(0x12);
+	// pAdvertising->setMinPreferred(0x12);
 	BLEDevice::startAdvertising();
 	Serial.println("Characteristic defined! Now you can read it in your phone!");
 }
