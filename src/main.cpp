@@ -31,20 +31,43 @@ const SPISettings adc_settings = SPISettings(spi_clk_rate, MSBFIRST, SPI_MODE0);
 #define PD_PIN A7	// PD_EN Pin
 
 /* BLE */
-#define SERVICE_UUID "42bce946-ada2-4607-9d2f-71ec54c0cdf4"			// Service UUID
-#define CHARACTERISTIC_UUID "820fc77c-e787-4103-a731-3937e965bc95"	// Characteristic UUID
+#define SERVICE_UUID "00010000-ada2-4607-9d2f-71ec54c0cdf4"			// Service UUID
 #define DEVICE_NAME "PLAQCHEK"	// Device Name to use on BLE connection
-#define DEVICE_DESC "PLAQCHEK Heart Risk Detector"
 
+
+// BLE Characteristics
+BLECharacteristic *lpPLA2Characteristic,	// LpPLA2 Data
+				  *statusCharacteristic,	// Status Data
+				  *progressCharacteristic,	// Progress Data
+				  *startCharacteristic;		// Start Data
+
+#define LPPLA2_UUID "0001RN01-ada2-4607-9d2f-71ec54c0cdf4"	// Lp-PLA2 Characteristic UUID
+#define STATUS_UUID "0001R002-ada2-4607-9d2f-71ec54c0cdf4"	// Status Characteristic UUID
+#define PROGRESS_UUID "0001RN03-ada2-4607-9d2f-71ec54c0cdf4"	// Progress Characteristic UUID
+#define START_UUID "000100W4-ada2-4607-9d2f-71ec54c0cdf4"	// Start Characteristic UUID
+
+bool is_connected = false;	// Connection status
+
+// BLECallback for handling successful connections
 class BLECallback : public BLEServerCallbacks {
 	void onConnect(BLEServer* pServer) {
 		Serial.println("Device Connected!");
+		is_connected = true;
 	}
 	void onDisconnect(BLEServer* pServer) {
 		Serial.println("Device Disconnected!");
+		is_connected = false;
 	}
 };
 
+// Data Parameters
+float lppla2_value = 0.0f;	// Lp-PLA2 value in ppm
+String status_value = "";	// Status of sample
+u_int16_t progress_value = 0; 	// Progress value in %
+
+/**
+ * Setup
+ */
 void setup() {
 	// Launch MSG
 	Serial.begin(9600);
@@ -75,15 +98,40 @@ void setup() {
 	// Setup BLE
 	BLEDevice::init(DEVICE_NAME);
 	BLEServer *pServer = BLEDevice::createServer();
+
+	// Connection Ping
 	pServer->setCallbacks(new BLECallback());
 
+	// Setup Service
 	BLEService *pService = pServer->createService(SERVICE_UUID);
-	BLECharacteristic *pCharacteristic = pService->createCharacteristic(
-											CHARACTERISTIC_UUID,
-											BLECharacteristic::PROPERTY_READ |
+
+	// Setup Characteristics
+	lpPLA2Characteristic = pService->createCharacteristic(
+											LPPLA2_UUID,
+											BLECharacteristic::PROPERTY_READ |		
+                        					BLECharacteristic::PROPERTY_NOTIFY
+										);
+	lpPLA2Characteristic->setValue(0x00);
+
+	statusCharacteristic = pService->createCharacteristic(
+											STATUS_UUID,
+											BLECharacteristic::PROPERTY_READ
+										);
+	statusCharacteristic->setValue("");
+
+	progressCharacteristic = pService->createCharacteristic(
+											PROGRESS_UUID,
+											BLECharacteristic::PROPERTY_READ |		
+                        					BLECharacteristic::PROPERTY_NOTIFY
+										);
+	progressCharacteristic->setValue(0x00);
+
+	startCharacteristic = pService->createCharacteristic(
+											START_UUID,
 											BLECharacteristic::PROPERTY_WRITE
 										);
-	pCharacteristic->setValue(DEVICE_DESC);
+
+	// Start Service
 	pService->start();
 
 	// Start Advertising
@@ -91,12 +139,17 @@ void setup() {
 	pAdvertising->addServiceUUID(SERVICE_UUID);
 	pAdvertising->setScanResponse(true);
 	pAdvertising->setMinPreferred(0x06);  // functions that help with iPhone connections issue
-	// pAdvertising->setMinPreferred(0x12);
 	BLEDevice::startAdvertising();
-	Serial.println("Characteristic defined! Now you can read it in your phone!");
+
+	// Advertising
+	Serial.println("Device BLE started to scan...");
 }
 
-// ADC Functions
+/**
+ * Reads the ADC using SPI
+ * 
+ * @return x in x/max_resolution
+ */
 uint16_t read_adc() {
 	digitalWrite(SPI_CS, HIGH);				// Enable the chip
 	SPI.beginTransaction(adc_settings); 	// Small delay for stability
@@ -112,8 +165,11 @@ uint16_t read_adc() {
 	return (highByte << 8) | lowByte;
 }
 
+/**
+ * Loop
+ */
 void loop() {
-	delay(2000);
 	uint16_t bit = read_adc();
-	Serial.printf("ADC Bit: %d", bit);
+	Serial.printf("ADC Bit: %d\n", bit);
+	delay(2000);
 }
