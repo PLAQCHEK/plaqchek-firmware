@@ -62,7 +62,7 @@ class BLECallback : public BLEServerCallbacks {
 
 // Data Parameters
 float lppla2_value = 0.0f;	// Lp-PLA2 value in ppm
-String status_value = "";	// Status of sample
+u_int16_t status_value = 0;	// Status of sample
 u_int16_t progress_value = 0; 	// Progress value in %
 
 /**
@@ -111,20 +111,20 @@ void setup() {
 											BLECharacteristic::PROPERTY_READ |		
                         					BLECharacteristic::PROPERTY_NOTIFY
 										);
-	lpPLA2Characteristic->setValue(0x00);
+	lpPLA2Characteristic->setValue(lppla2_value);
 
 	statusCharacteristic = pService->createCharacteristic(
 											STATUS_UUID,
 											BLECharacteristic::PROPERTY_READ
 										);
-	statusCharacteristic->setValue("");
+	statusCharacteristic->setValue(status_value);
 
 	progressCharacteristic = pService->createCharacteristic(
 											PROGRESS_UUID,
 											BLECharacteristic::PROPERTY_READ |		
                         					BLECharacteristic::PROPERTY_NOTIFY
 										);
-	progressCharacteristic->setValue(0x00);
+	progressCharacteristic->setValue(progress_value);
 
 	startCharacteristic = pService->createCharacteristic(
 											START_UUID,
@@ -142,7 +142,10 @@ void setup() {
 	BLEDevice::startAdvertising();
 
 	// Advertising
-	Serial.println("Device BLE started to scan...");
+	Serial.println("Plaqchek device started to scan...");
+
+	// Dummy Data Seed
+	randomSeed(analogRead(0));
 }
 
 /**
@@ -169,7 +172,24 @@ uint16_t read_adc() {
  * Loop
  */
 void loop() {
-	uint16_t bit = read_adc();
-	Serial.printf("ADC Bit: %d\n", bit);
+	// uint16_t bit = read_adc();
+	// Serial.printf("ADC Bit: %d\n", bit);
+
+	// Dummy Data for now
+	// Random update stuff
+
+	lppla2_value = random(0, 8000)/10.0;
+	lpPLA2Characteristic->setValue(lppla2_value);
+	lpPLA2Characteristic->notify();
+
+	status_value = random(0, 3);
+	statusCharacteristic->setValue(status_value);
+
+	progress_value = progress_value == 100 ? 0 : progress_value + 1;
+	progressCharacteristic->setValue(progress_value);
+	progressCharacteristic->notify();
+
+	Serial.printf("Lp-PLA2: %fppm | Status: %d | Progress%d%", lppla2_value, status_value, progress_value);
+
 	delay(2000);
 }
