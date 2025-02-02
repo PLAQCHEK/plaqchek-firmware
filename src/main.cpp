@@ -7,6 +7,18 @@
 #include <Wire.h>
 #include <SPI.h>
 
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+
+/* OLED */
+#define SCREEN_WIDTH 128	// OLED display width, in pixels
+#define SCREEN_HEIGHT 64	// OLED display height, in pixels
+
+#define OLED_RESET -1	// Reset pin; -1 if sharing Arduino reset pin
+
+#define SCREEN_ADDRESS 0x3D	// 0x3C-0x3D, based on jumpers
+const Adafruit_SSD1306 display = Adafruit_SSD1306(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+
 /* SPI */
 #define SPI_CS D10	// SPI Chip Select
 
