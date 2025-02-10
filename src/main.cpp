@@ -169,7 +169,7 @@ uint16_t read_adc() {
 
     // Start conversion by setting CNVST HIGH
     digitalWrite(SPI_CS, HIGH);
-    delayMicroseconds(0.7);       // Wait for conversion to complete (700 ns based on ADC's conversion time)
+    delayMicroseconds(1);       // Wait for conversion to complete (approx 700 ns based on ADC's conversion time)
 
     SPI.beginTransaction(adc_settings);
 
