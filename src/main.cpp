@@ -163,18 +163,27 @@ void setup() {
  * @return x in x/max_resolution
  */
 uint16_t read_adc() {
-	digitalWrite(SPI_CS, HIGH);				// Enable the chip
-	SPI.beginTransaction(adc_settings); 	// Small delay for stability
+    // Ensure CNVST is LOW initially
+    digitalWrite(SPI_CS, LOW);
+    delayMicroseconds(1);       // Ensure CNVST is LOW for a short period
 
-	// Send 16 clock cycles to read ADC data
-	uint8_t highByte = SPI.transfer(0x00);  // Read MSB
-	uint8_t lowByte = SPI.transfer(0x00);   // Read LSB
+    // Start conversion by setting CNVST HIGH
+    digitalWrite(SPI_CS, HIGH);
+    delayMicroseconds(0.7);       // Wait for conversion to complete (700 ns based on ADC's conversion time)
 
-	SPI.endTransaction();
-	digitalWrite(SPI_CS, LOW); // Disable the chip
-	
-	// Combine MSB and LSB
-	return (highByte << 8) | lowByte;
+    SPI.beginTransaction(adc_settings);
+
+    // Bring CNVST LOW to enable data output
+    digitalWrite(SPI_CS, LOW);
+
+    // Read MSB and LSB
+    uint8_t highByte = SPI.transfer(0x00);
+    uint8_t lowByte = SPI.transfer(0x00);
+
+    SPI.endTransaction();
+
+    // Combine MSB and LSB
+    return (highByte << 8) | lowByte;
 }
 
 /**
