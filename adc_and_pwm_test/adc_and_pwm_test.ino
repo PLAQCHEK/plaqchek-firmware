@@ -32,7 +32,7 @@ bool pwm_state = LOW;
 
 void pwm() {
 	unsigned long current_t_millis = millis();
-	if (current_t_millis - previous_t_millis >= PWM_PERIOD / 2) {
+	if (current_t_millis - previous_t_millis >= PWM_PERIOD_MS / 2) {
 		previous_t_millis = current_t_millis;
 		pwm_state =! pwm_state;
 		digitalWrite(PWM, pwm_state);
