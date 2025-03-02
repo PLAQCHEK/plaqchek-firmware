@@ -25,6 +25,11 @@ const Adafruit_SSD1306 display = Adafruit_SSD1306(SCREEN_WIDTH, SCREEN_HEIGHT, &
 const u_int spi_clk_rate = 1*10^6;	// Clock Rate (100 MHz, but test with 1 MHz)
 const SPISettings adc_settings = SPISettings(spi_clk_rate, MSBFIRST, SPI_MODE0);	// SPI Settings
 
+#define VREF 5.0 // reference votlage for ADC
+#define ADC_RES 65536.0	// Resolution for the ADC
+uint16_t adc_val = 0;	// Latest ADC Value
+float exact_adc_val = 0.0f;	// Exact Voltage from ADC
+
 /* I2C */
 #define DISPLAY_ADDRESS = 40	// I2C Device Address
 
@@ -38,6 +43,9 @@ const SPISettings adc_settings = SPISettings(spi_clk_rate, MSBFIRST, SPI_MODE0);
 
 /* Potentiostat Sensor */
 #define POTENT_PIN D3	// Potentiostat PWM Pin
+#define PWM_PERIOD_MS 1000	// Period in ms.
+unsigned long previous_t_millis = 0;	// For time tracking
+bool pwm_state = LOW;	// Current state of PWM
 
 /* Power Delivery */
 #define PD_PIN A7	// PD_EN Pin
@@ -90,7 +98,7 @@ void setup() {
 
 	// Setup SPI
 	pinMode(SPI_CS, OUTPUT);
-	digitalWrite(SPI_CS, LOW);
+	digitalWrite(SPI_CS, HIGH);
 	SPI.begin();
 
 	// Setup LED
@@ -158,39 +166,52 @@ void setup() {
 }
 
 /**
- * Reads the ADC using SPI
- * 
- * @return x in x/max_resolution
+ * Update the PWM cycle for Potentiostat
  */
-uint16_t read_adc() {
-    // Ensure CNVST is LOW initially
-    digitalWrite(SPI_CS, LOW);
-    delayMicroseconds(1);       // Ensure CNVST is LOW for a short period
+void update_pwm() {
+	// Get Current Time
+	unsigned long current_t_millis = millis();
+	// Check if switch is needed
+	if (current_t_millis - previous_t_millis >= PWM_PERIOD_MS / 2) {
+		previous_t_millis = current_t_millis;
+		pwm_state != pwm_state;
+		// Update state
+		digitalWrite(POTENT_PIN, pwm_state);
+	}
+}
 
-    // Start conversion by setting CNVST HIGH
-    digitalWrite(SPI_CS, HIGH);
-    delayMicroseconds(1);       // Wait for conversion to complete (approx 700 ns based on ADC's conversion time)
-
-    SPI.beginTransaction(adc_settings);
+/**
+ * Reads the ADC using SPI
+ */
+void read_adc() {
+	// Start Transaction
+	SPI.beginTransaction(adc_settings);
 
     // Bring CNVST LOW to enable data output
     digitalWrite(SPI_CS, LOW);
+	delayMicroseconds(100);
 
-    // Read MSB and LSB
-    uint8_t highByte = SPI.transfer(0x00);
-    uint8_t lowByte = SPI.transfer(0x00);
+    // Read ADC
+    adc_val = SPI.transfer16(0x00);
+	delayMicroseconds(100);
 
+	// Terminate Transaction
     SPI.endTransaction();
 
-    // Combine MSB and LSB
-    return (highByte << 8) | lowByte;
+	// Update Exact
+	exact_adc_val = (adc_val / 65536.0) * VREF;
 }
 
 /**
  * Loop
  */
 void loop() {
-	uint16_t bit = read_adc();
-	Serial.printf("ADC Bit: %d\n", bit);
-	delay(2000);
+	// Update PWM
+	update_pwm();
+
+	// Update ADC
+	read_adc();
+	Serial.printf("ADC Bit: %d ", adc_val);
+	Serial.printf("ADC Value (V): %d\n", exact_adc_val);
+	delay(1000);
 }
