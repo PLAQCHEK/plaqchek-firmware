@@ -51,20 +51,27 @@ bool pwm_state = LOW;	// Current state of PWM
 #define PD_PIN A7	// PD_EN Pin
 
 /* BLE */
-#define SERVICE_UUID "00010000-ada2-4607-9d2f-71ec54c0cdf4"			// Service UUID
 #define DEVICE_NAME "PLAQCHEK"	// Device Name to use on BLE connection
+#define MAINSERVICE_UUID "00010000-ada2-4607-9d2f-71ec54c0cdf4"		// Main Service UUID
+#define DEVSERVICE_UUID "000D0000-ada2-4607-9d2f-71ec54c0cdf4"		// Dev Service UUID
 
-
-// BLE Characteristics
+// Main Service BLE Characteristics
 BLECharacteristic *lpPLA2Characteristic,	// LpPLA2 Data
 				  *statusCharacteristic,	// Status Data
 				  *progressCharacteristic,	// Progress Data
 				  *startCharacteristic;		// Start Data
 
-#define LPPLA2_UUID "0001RN01-ada2-4607-9d2f-71ec54c0cdf4"	// Lp-PLA2 Characteristic UUID
-#define STATUS_UUID "0001R002-ada2-4607-9d2f-71ec54c0cdf4"	// Status Characteristic UUID
-#define PROGRESS_UUID "0001RN03-ada2-4607-9d2f-71ec54c0cdf4"	// Progress Characteristic UUID
-#define START_UUID "000100W4-ada2-4607-9d2f-71ec54c0cdf4"	// Start Characteristic UUID
+#define LPPLA2_UUID "00010001-ada2-4607-9d2f-71ec54c0cdf4"	// Lp-PLA2 Characteristic UUID
+#define STATUS_UUID "00010002-ada2-4607-9d2f-71ec54c0cdf4"	// Status Characteristic UUID
+#define PROGRESS_UUID "00010003-ada2-4607-9d2f-71ec54c0cdf4"	// Progress Characteristic UUID
+#define START_UUID "00010004-ada2-4607-9d2f-71ec54c0cdf4"	// Start Characteristic UUID
+
+// Main Service BLE Characteristics
+BLECharacteristic *adcCharacteristic,	// ADC Data
+				  *pwmCharacteristic;	// PWM Data
+
+#define ADC_UUID "000D0001-ada2-4607-9d2f-71ec54c0cdf4"	// ADC Characteristic UUID
+#define PWM_UUID "000D0002-ada2-4607-9d2f-71ec54c0cdf4"	// PWM Characteristic UUID
 
 bool is_connected = false;	// Connection status
 
@@ -85,6 +92,8 @@ class BLEStartCallback: public BLECharacteristicCallbacks {
 	void onWrite(BLECharacteristic *pCharacteristic) {
 		std::string value = pCharacteristic->getValue();
 
+		// Just print the received msg
+		Serial.print("Message Received: ");
 		if (value.length() > 0) {
 			for (int i = 0; i < value.length(); i++)
 				Serial.print(value[i]);
@@ -135,42 +144,63 @@ void setup() {
 	// Connection Ping
 	pServer->setCallbacks(new BLECallback());
 
-	// Setup Service
-	BLEService *pService = pServer->createService(SERVICE_UUID);
+	// Setup Main Service
+	BLEService *mainService = pServer->createService(MAINSERVICE_UUID);
 
 	// Setup Characteristics
-	lpPLA2Characteristic = pService->createCharacteristic(
+	lpPLA2Characteristic = mainService->createCharacteristic(
 											LPPLA2_UUID,
 											BLECharacteristic::PROPERTY_READ |		
                         					BLECharacteristic::PROPERTY_NOTIFY
 										);
 	lpPLA2Characteristic->setValue("");
 
-	statusCharacteristic = pService->createCharacteristic(
+	statusCharacteristic = mainService->createCharacteristic(
 											STATUS_UUID,
 											BLECharacteristic::PROPERTY_READ
 										);
 	statusCharacteristic->setValue("");
 
-	progressCharacteristic = pService->createCharacteristic(
+	progressCharacteristic = mainService->createCharacteristic(
 											PROGRESS_UUID,
 											BLECharacteristic::PROPERTY_READ |		
                         					BLECharacteristic::PROPERTY_NOTIFY
 										);
 	progressCharacteristic->setValue("");
 
-	startCharacteristic = pService->createCharacteristic(
+	startCharacteristic = mainService->createCharacteristic(
 											START_UUID,
 											BLECharacteristic::PROPERTY_WRITE
 										);
 	startCharacteristic->setCallbacks(new BLEStartCallback());
 
-	// Start Service
-	pService->start();
+	// Start Main Service
+	mainService->start();
+
+	// Setup Dev Service
+	BLEService *devService = pServer->createService(DEVSERVICE_UUID);
+
+	adcCharacteristic = devService->createCharacteristic(
+											ADC_UUID,
+											BLECharacteristic::PROPERTY_READ |		
+                        					BLECharacteristic::PROPERTY_NOTIFY
+										);
+	adcCharacteristic->setValue(adc_val);
+
+	pwmCharacteristic = devService->createCharacteristic(
+											PWM_UUID,
+											BLECharacteristic::PROPERTY_READ |		
+                        					BLECharacteristic::PROPERTY_NOTIFY
+										);
+	pwmCharacteristic->setValue("0");
+
+	// Start Main Service
+	devService->start();
 
 	// Start Advertising
 	BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
-	pAdvertising->addServiceUUID(SERVICE_UUID);
+	pAdvertising->addServiceUUID(MAINSERVICE_UUID);
+	pAdvertising->addServiceUUID(DEVSERVICE_UUID);
 	pAdvertising->setScanResponse(true);
 	pAdvertising->setMinPreferred(0x06);  // functions that help with iPhone connections issue
 	pAdvertising->setMinPreferred(0x12);
@@ -192,6 +222,8 @@ void update_pwm() {
 		pwm_state != pwm_state;
 		// Update state
 		digitalWrite(POTENT_PIN, pwm_state);
+		pwmCharacteristic->setValue(pwm_state ? "1" : "0");
+		pwmCharacteristic->notify();
 	}
 }
 
@@ -211,9 +243,12 @@ void read_adc() {
 	delayMicroseconds(100);
 
 	// Terminate Transaction
+	digitalWrite(SPI_CS, HIGH);
     SPI.endTransaction();
 
 	// Update Exact
+	adcCharacteristic->setValue(adc_val);
+	adcCharacteristic->notify();
 	exact_adc_val = (adc_val / 65536.0) * VREF;
 }
 
