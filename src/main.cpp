@@ -80,6 +80,19 @@ class BLECallback : public BLEServerCallbacks {
 	}
 };
 
+// BLE Start Service Callback
+class BLEStartCallback: public BLECharacteristicCallbacks {
+	void onWrite(BLECharacteristic *pCharacteristic) {
+		std::string value = pCharacteristic->getValue();
+
+		if (value.length() > 0) {
+			for (int i = 0; i < value.length(); i++)
+				Serial.print(value[i]);
+		}
+		Serial.print("\n");
+	}
+};
+
 // Data Parameters
 float lppla2_value = 0.0f;	// Lp-PLA2 value in ppm
 String status_value = "";	// Status of sample
@@ -90,7 +103,7 @@ u_int16_t progress_value = 0; 	// Progress value in %
  */
 void setup() {
 	// Launch MSG
-	Serial.begin(9600);
+	Serial.begin(115200);
 	Serial.println("Starting BLE work!");
 	
 	// Setup I2C
@@ -131,7 +144,7 @@ void setup() {
 											BLECharacteristic::PROPERTY_READ |		
                         					BLECharacteristic::PROPERTY_NOTIFY
 										);
-	lpPLA2Characteristic->setValue(0x00);
+	lpPLA2Characteristic->setValue("");
 
 	statusCharacteristic = pService->createCharacteristic(
 											STATUS_UUID,
@@ -144,12 +157,13 @@ void setup() {
 											BLECharacteristic::PROPERTY_READ |		
                         					BLECharacteristic::PROPERTY_NOTIFY
 										);
-	progressCharacteristic->setValue(0x00);
+	progressCharacteristic->setValue("");
 
 	startCharacteristic = pService->createCharacteristic(
 											START_UUID,
 											BLECharacteristic::PROPERTY_WRITE
 										);
+	startCharacteristic->setCallbacks(new BLEStartCallback());
 
 	// Start Service
 	pService->start();
@@ -159,6 +173,7 @@ void setup() {
 	pAdvertising->addServiceUUID(SERVICE_UUID);
 	pAdvertising->setScanResponse(true);
 	pAdvertising->setMinPreferred(0x06);  // functions that help with iPhone connections issue
+	pAdvertising->setMinPreferred(0x12);
 	BLEDevice::startAdvertising();
 
 	// Advertising
@@ -211,7 +226,13 @@ void loop() {
 
 	// Update ADC
 	read_adc();
+
+	// Logging
 	Serial.printf("ADC Bit: %d ", adc_val);
-	Serial.printf("ADC Value (V): %d\n", exact_adc_val);
+	Serial.printf("ADC Value (V): ");
+	Serial.print(exact_adc_val, 3);
+	Serial.print("V\n");
+
+	// Delay
 	delay(1000);
 }
