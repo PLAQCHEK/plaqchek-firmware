@@ -17,7 +17,7 @@
 #define OLED_RESET -1	// Reset pin; -1 if sharing Arduino reset pin
 
 #define SCREEN_ADDRESS 0x3D	// 0x3C-0x3D, based on jumpers
-const Adafruit_SSD1306 display = Adafruit_SSD1306(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+Adafruit_SSD1306 display = Adafruit_SSD1306(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 /* SPI */
 #define SPI_CS D10	// SPI Chip Select
@@ -108,15 +108,47 @@ String status_value = "";	// Status of sample
 u_int16_t progress_value = 0; 	// Progress value in %
 
 /**
+ * Draw the current UI
+ */
+void drawUI() {
+	display.setTextSize(1);    
+	display.setTextColor(SSD1306_WHITE);
+	display.setCursor(0, 0);
+	display.println(F("Health Monitor"));
+	
+	display.drawLine(0, 10, 128, 10, SSD1306_WHITE);  // Divider line
+  
+	display.setCursor(0, 20);
+	display.println(F("Heart Rate: 72 BPM"));
+  
+	display.setCursor(0, 35);
+	display.println(F("Oxygen: 98%"));
+  
+	display.setCursor(0, 50);
+	display.println(F("Battery: 85%"));
+  
+	display.drawRect(90, 50, 30, 10, SSD1306_WHITE);  // Battery outline
+	display.fillRect(90, 50, 25, 10, SSD1306_WHITE);  // Battery level
+}
+
+/**
  * Setup
  */
 void setup() {
 	// Launch MSG
 	Serial.begin(115200);
-	Serial.println("Starting BLE work!");
-	
-	// Setup I2C
-	Wire.begin();
+
+	// Initialize OLED (I2C)
+	if (!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
+		Serial.println(F("SSD1306 allocation failed"));
+		for (;;); // Halt execution
+	}
+
+	display.clearDisplay();
+
+	drawUI();
+
+	display.display();  // Render to the screen
 
 	// Setup SPI
 	pinMode(SPI_CS, OUTPUT);
