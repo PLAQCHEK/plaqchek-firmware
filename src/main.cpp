@@ -11,6 +11,7 @@
 #include <Adafruit_SSD1306.h>
 
 /* OLED */
+#define DISPLAY_ATTACHED 0x01 // Whether to use display or not
 #define SCREEN_WIDTH 128	// OLED display width, in pixels
 #define SCREEN_HEIGHT 64	// OLED display height, in pixels
 
@@ -164,7 +165,7 @@ void drawUI() {
 	display.setTextSize(1);    
 	display.setTextColor(SSD1306_WHITE);
 	display.setCursor(0, 0);
-	display.println(F("PLAQCHEK Heart Monitor"));
+	display.println("PLAQCHEK Heart Monitor");
 	
 	display.drawLine(0, 10, SCREEN_WIDTH, 10, SSD1306_WHITE);  // Divider line
   
@@ -209,15 +210,17 @@ void setup() {
 	Serial.begin(115200);
 
 	// Initialize OLED (I2C)
-	if (!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
-		Serial.println(F("SSD1306 allocation failed"));
-		// HLH = OLED Failure
-		digitalWrite(LED_1, HIGH);
-		digitalWrite(LED_2, LOW);
-		digitalWrite(LED_3, HIGH);
-		for (;;); // Halt execution
+	if (!DISPLAY_ATTACHED) {
+		if (!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
+			Serial.println(F("SSD1306 allocation failed"));
+			// HLH = OLED Failure
+			digitalWrite(LED_1, HIGH);
+			digitalWrite(LED_2, LOW);
+			digitalWrite(LED_3, HIGH);
+			for (;;); // Halt execution
+		}
+		drawBoot();
 	}
-	drawBoot();
 
 	// Setup SPI
 	pinMode(SPI_CS, OUTPUT);
@@ -311,7 +314,8 @@ void setup() {
 	Serial.println("Device Booted Successfully");
 
 	// Render UI
-	drawUI();
+	if (!DISPLAY_ATTACHED)
+		drawUI();
 
 	// Reset Lights
 	digitalWrite(LED_1, LOW);
