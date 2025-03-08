@@ -38,6 +38,14 @@ float exact_adc_val = 0.0f;	// Exact Voltage from ADC
 #define LED_2 D8	// LED 2
 #define LED_3 D9	// LED 3
 
+/* SW Pins */
+#define SW1 A2
+#define SW2 A0
+#define SW3 A1
+bool sw1_state = LOW;
+bool sw2_state = LOW;
+bool sw3_state = LOW;
+
 /* Temperature Sensor */
 #define TEMP_PIN D2	// Temperature Sensor Input Pin
 
@@ -107,6 +115,11 @@ float lppla2_value = 0.0f;	// Lp-PLA2 value in ppm
 String status_value = "";	// Status of sample
 u_int16_t progress_value = 0; 	// Progress value in %
 
+// UI Parameters
+bool started = false;
+bool baseline_read = false;
+bool reading = false;
+
 /**
  * Draw the current UI
  */
@@ -114,51 +127,67 @@ void drawUI() {
 	display.setTextSize(1);    
 	display.setTextColor(SSD1306_WHITE);
 	display.setCursor(0, 0);
-	display.println(F("Health Monitor"));
+	display.println(F("PLAQCHEK Heart Monitor"));
 	
-	display.drawLine(0, 10, 128, 10, SSD1306_WHITE);  // Divider line
+	display.drawLine(0, 10, SCREEN_WIDTH, 10, SSD1306_WHITE);  // Divider line
   
-	display.setCursor(0, 20);
-	display.println(F("Heart Rate: 72 BPM"));
-  
-	display.setCursor(0, 35);
-	display.println(F("Oxygen: 98%"));
-  
-	display.setCursor(0, 50);
-	display.println(F("Battery: 85%"));
-  
-	display.drawRect(90, 50, 30, 10, SSD1306_WHITE);  // Battery outline
-	display.fillRect(90, 50, 25, 10, SSD1306_WHITE);  // Battery level
+	// Different States
+	if (!started) {
+		display.setCursor(0, 20);
+		display.println("Start When Ready");
+	} else if (!baseline_read) {
+		display.setCursor(0, 20);
+		display.println("Baseline Ready When Ready");
+	} else if (!reading) {
+		display.setCursor(0, 20);
+		display.println("Analysis When Ready");
+	} else {
+		display.setCursor(0, 20);
+		display.printf("Pred Lp-PLA2 Conc: %.2f ng/mL\r\n", lppla2_value);
+		display.setCursor(0, 35);
+		display.printf("Risk Level: %s\r\n", lppla2_value > 200 ? "POS" : "NEG");
+		// Maybe some icon here
+		display.setCursor(0, 50);
+		display.println("Reset when Ready");
+	}
 }
 
 /**
  * Setup
  */
 void setup() {
+	// Setup LED
+	pinMode(LED_1, OUTPUT);
+	pinMode(LED_2, OUTPUT);
+	pinMode(LED_3, OUTPUT);
+
+	// Booting Lights
+	digitalWrite(LED_1, HIGH);
+	digitalWrite(LED_2, HIGH);
+	digitalWrite(LED_3, HIGH);
+
 	// Launch MSG
 	Serial.begin(115200);
 
 	// Initialize OLED (I2C)
 	if (!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
 		Serial.println(F("SSD1306 allocation failed"));
+		// HLH = OLED Failure
+		digitalWrite(LED_1, HIGH);
+		digitalWrite(LED_2, LOW);
+		digitalWrite(LED_3, HIGH);
 		for (;;); // Halt execution
 	}
 
+	// Render UI
 	display.clearDisplay();
-
 	drawUI();
-
 	display.display();  // Render to the screen
 
 	// Setup SPI
 	pinMode(SPI_CS, OUTPUT);
 	digitalWrite(SPI_CS, HIGH);
 	SPI.begin();
-
-	// Setup LED
-	pinMode(LED_1, OUTPUT);
-	pinMode(LED_2, OUTPUT);
-	pinMode(LED_3, OUTPUT);
 
 	// Setup Temperature Sensor
 	pinMode(TEMP_PIN, INPUT);
@@ -238,8 +267,27 @@ void setup() {
 	pAdvertising->setMinPreferred(0x12);
 	BLEDevice::startAdvertising();
 
-	// Advertising
-	Serial.println("Device BLE started to scan...");
+	// Setup Buttons
+	pinMode(SW1, INPUT);
+	pinMode(SW2, INPUT);
+	pinMode(SW3, INPUT);
+
+	// Final Message
+	Serial.println("Device Booted Successfully");
+
+	// Reset Lights
+	digitalWrite(LED_1, LOW);
+	digitalWrite(LED_2, LOW);
+	digitalWrite(LED_3, LOW);
+}
+
+/**
+ * Detect Button Status
+ */
+void update_buttons() {
+	sw1_state = digitalRead(SW1);
+	sw2_state = digitalRead(SW2);
+	sw3_state = digitalRead(SW3);
 }
 
 /**
@@ -288,6 +336,9 @@ void read_adc() {
  * Loop
  */
 void loop() {
+	// Update Buttons
+	update_buttons();
+
 	// Update PWM
 	update_pwm();
 
