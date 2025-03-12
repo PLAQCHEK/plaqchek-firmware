@@ -104,7 +104,7 @@ bool sw3_state = LOW;
 #define POTENT_PIN D3	// Potentiostat PWM Pin
 #define PWM_PERIOD_MS 1000	// Period in ms.
 unsigned long previous_t_millis = 0;	// For time tracking
-bool pwm_state = LOW;	// Current state of PWM
+bool pwm_state = false;	// Current state of PWM
 
 /* Power Delivery */
 #define PD_PIN A7	// PD_EN Pin
@@ -426,7 +426,7 @@ void update_pwm() {
 		previous_t_millis = current_t_millis;
 		pwm_state != pwm_state;
 		// Update state
-		digitalWrite(POTENT_PIN, pwm_state);
+		digitalWrite(POTENT_PIN, pwm_state ? HIGH : LOW);
 		pwmCharacteristic->setValue(pwm_state ? "1" : "0");
 		pwmCharacteristic->notify();
 	}
@@ -454,7 +454,7 @@ void read_adc() {
 	// Update Exact
 	adcCharacteristic->setValue(adc_val);
 	adcCharacteristic->notify();
-	exact_adc_val = (adc_val / 65536.0) * VREF;
+	exact_adc_val = (adc_val / ADC_RES) * VREF;
 }
 
 /**
