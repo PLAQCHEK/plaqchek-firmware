@@ -160,9 +160,10 @@ String status_value = "";	// Status of sample
 u_int16_t progress_value = 0; 	// Progress value in %
 
 // UI Parameters
+bool start_ref = false;
+bool reference_done = false;
 bool started = false;
-bool baseline_read = false;
-bool reading = false;
+bool reading_done = false;
 
 /**
  * Draw Boot Screen
@@ -193,15 +194,18 @@ void drawUI() {
 	display.drawLine(0, 10, SCREEN_WIDTH, 10, SSD1306_WHITE);  // Divider line
   
 	// Different States
-	if (!started) {
+	if (!start_ref) {
 		display.setCursor(0, 20);
-		display.println("Start When Ready");
-	} else if (!baseline_read) {
+		display.println("Click REF to read dark reference");
+	} else if (!reference_done) {
 		display.setCursor(0, 20);
-		display.println("Baseline Ready When Ready");
-	} else if (!reading) {
+		display.println("Reading dark reference...");
+	} else if (!started) {
 		display.setCursor(0, 20);
-		display.println("Analysis When Ready");
+		display.println("Dark reference set!\nClick START to begin");
+	} else if (!reading_done) {
+		display.setCursor(0, 20);
+		display.println("Reading...");
 	} else {
 		display.setCursor(0, 20);
 		display.printf("Pred Lp-PLA2 Conc: %.2f ng/mL\r\n", lppla2_value);
@@ -209,7 +213,7 @@ void drawUI() {
 		display.printf("Risk Level: %s\r\n", lppla2_value > 200 ? "POS" : "NEG");
 		// Maybe some icon here
 		display.setCursor(0, 50);
-		display.println("Reset when Ready");
+		display.println("Reset to start again");
 	}
 
 	display.display();  // Render to the screen
@@ -334,7 +338,7 @@ void setup() {
 	pinMode(SW3, INPUT);
 
 	// Final Message
-	Serial.println("Device Booted Successfully");
+	Serial.println("device boot ok");
 
 	// Render UI
 	if (DISPLAY_ATTACHED) {
@@ -417,6 +421,16 @@ void loop() {
 	Serial.printf("ADC Value (V): ");
 	Serial.print(exact_adc_val, 3);
 	Serial.print("V\n");
+
+	// Update State
+	if (!start_ref && sw1_state == HIGH) { // Started reference reading
+		start_ref = true;
+	} else if (!started && sw3_state == HIGH) { // Started reading
+		started = true;
+	} else if (reading_done && sw2_state == HIGH) { // Reset current reading
+		started = false;
+		reading_done = false;
+	} 
 
 	// Delay
 	delay(1000);
