@@ -386,7 +386,7 @@ void setup() {
 
 	// Render UI
 	if (DISPLAY_ATTACHED) {
-		delay(2500); // so you can see boot screen
+		delay(1000); // so you can see boot screen
 		drawUI();
 	}
 
@@ -399,10 +399,20 @@ void setup() {
 /**
  * Detect Button Status
  */
-void update_buttons() {
+void update_states() {
 	sw1_state = digitalRead(SW1);
 	sw2_state = digitalRead(SW2);
 	sw3_state = digitalRead(SW3);
+
+	// Update State
+	if (!start_ref && sw1_state == HIGH) { // Started reference reading
+		start_ref = true;
+	} else if (!started && sw3_state == HIGH) { // Started reading
+		started = true;
+	} else if (reading_done && sw2_state == HIGH) { // Reset current reading
+		started = false;
+		reading_done = false;
+	} 
 }
 
 /**
@@ -452,7 +462,7 @@ void read_adc() {
  */
 void loop() {
 	// Update Buttons
-	update_buttons();
+	update_states();
 
 	// Update PWM
 	update_pwm();
@@ -461,24 +471,9 @@ void loop() {
 	read_adc();
 
 	// Logging
-	Serial.printf("ADC Bit: %d ", adc_val);
-	Serial.printf("ADC Value (V): ");
-	Serial.print(exact_adc_val, 3);
-	Serial.print("V\n");
-
-	// Update State
-	if (!start_ref && sw1_state == HIGH) { // Started reference reading
-		start_ref = true;
-	} else if (!started && sw3_state == HIGH) { // Started reading
-		started = true;
-	} else if (reading_done && sw2_state == HIGH) { // Reset current reading
-		started = false;
-		reading_done = false;
-	} 
+	Serial.printf("%d\n", adc_val);
 
 	// Update UI
-	drawUI();
-
-	// Delay
-	delay(250);
+	if (DISPLAY_ATTACHED)
+		drawUI();
 }
