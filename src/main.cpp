@@ -66,6 +66,13 @@ const unsigned char logo_bitmap [] PROGMEM = {
 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
 };
 
+// BLE Logo : 7x7px
+#define BLE_LOGO_WIDTH 7
+#define BLE_LOGO_HEIGHT 7
+const unsigned char ble_logo [] PROGMEM = {
+	0x18, 0x94, 0x52, 0x2c, 0x52, 0x94, 0x18
+};
+
 /* SPI */
 #define SPI_CS D10	// SPI Chip Select
 
@@ -127,15 +134,33 @@ BLECharacteristic *adcCharacteristic,	// ADC Data
 
 bool is_connected = false;	// Connection status
 
+/* Data Parameters */
+float lppla2_value = 0.0f;	// Lp-PLA2 value in ppm
+String status_value = "";	// Status of sample
+u_int16_t progress_value = 0; 	// Progress value in %
+
+/* UI Parameters */
+bool start_ref = false;
+bool reference_done = false;
+bool started = false;
+bool reading_done = false;
+
+/* Start Service Commands */
+#define START "start"
+#define RESET "reset"
+#define HARDRESET "hard"
+
 // BLECallback for handling successful connections
 class BLECallback : public BLEServerCallbacks {
 	void onConnect(BLEServer* pServer) {
 		Serial.println("Device Connected!");
 		is_connected = true;
+		BLEDevice::stopAdvertising();
 	}
 	void onDisconnect(BLEServer* pServer) {
 		Serial.println("Device Disconnected!");
 		is_connected = false;
+		BLEDevice::startAdvertising();
 	}
 };
 
@@ -145,25 +170,35 @@ class BLEStartCallback: public BLECharacteristicCallbacks {
 		std::string value = pCharacteristic->getValue();
 
 		// Just print the received msg
-		Serial.print("Message Received: ");
+		Serial.print("ble start service received: ");
 		if (value.length() > 0) {
 			for (int i = 0; i < value.length(); i++)
 				Serial.print(value[i]);
 		}
 		Serial.print("\n");
+
+		// Process the command
+		if (value == START) {
+			// Grab dark reference if not already
+			if (!reference_done) {
+				start_ref = true;
+			// Start reading
+			} else {
+				started = true;
+			}
+		// Reset for new reading
+		} else if (value == RESET) {
+			started = false;
+			reading_done = false;
+		// Reset to redo dark reference
+		} else if (value == HARDRESET) {
+			start_ref = false;
+			reference_done = false;
+			started = false;
+			reading_done = false;
+		}
 	}
 };
-
-// Data Parameters
-float lppla2_value = 0.0f;	// Lp-PLA2 value in ppm
-String status_value = "";	// Status of sample
-u_int16_t progress_value = 0; 	// Progress value in %
-
-// UI Parameters
-bool start_ref = false;
-bool reference_done = false;
-bool started = false;
-bool reading_done = false;
 
 /**
  * Draw Boot Screen
@@ -181,6 +216,9 @@ void drawBoot() {
 
 /**
  * Draw the current UI
+ * 
+ * Note: Letters take up 7x5 pixels with 1 pixel spacing and 1 pixel spacing 
+ * between lines
  */
 void drawUI() {
 	// Make sure the display is cleared
@@ -188,31 +226,37 @@ void drawUI() {
 
 	display.setTextSize(1);    
 	display.setTextColor(SSD1306_WHITE);
+
+	// Display Title
 	display.setCursor(0, 0);
 	display.println("PLAQCHEK");
-	
 	display.drawLine(0, 10, SCREEN_WIDTH, 10, SSD1306_WHITE);  // Divider line
+
+	// BLE Connection Icon
+	if (is_connected) {
+		display.drawBitmap(SCREEN_WIDTH - BLE_LOGO_WIDTH, 0, ble_logo, BLE_LOGO_WIDTH, BLE_LOGO_HEIGHT, WHITE);
+	}
   
 	// Different States
 	if (!start_ref) {
-		display.setCursor(0, 20);
-		display.println("Click REF to read dark reference");
+		display.setCursor(0, 15);
+		display.println("Click REF to read\ndark reference");
 	} else if (!reference_done) {
-		display.setCursor(0, 20);
-		display.println("Reading dark reference...");
+		display.setCursor(0, 15);
+		display.println("Reading dark\nreference...");
 	} else if (!started) {
-		display.setCursor(0, 20);
+		display.setCursor(0, 15);
 		display.println("Dark reference set!\nClick START to begin");
 	} else if (!reading_done) {
-		display.setCursor(0, 20);
+		display.setCursor(0, 15);
 		display.println("Reading...");
 	} else {
-		display.setCursor(0, 20);
+		display.setCursor(0, 15);
 		display.printf("Pred Lp-PLA2 Conc: %.2f ng/mL\r\n", lppla2_value);
-		display.setCursor(0, 35);
+		display.setCursor(0, 25);
 		display.printf("Risk Level: %s\r\n", lppla2_value > 200 ? "POS" : "NEG");
 		// Maybe some icon here
-		display.setCursor(0, 50);
+		display.setCursor(0, 35);
 		display.println("Reset to start again");
 	}
 
@@ -432,6 +476,9 @@ void loop() {
 		reading_done = false;
 	} 
 
+	// Update UI
+	drawUI();
+
 	// Delay
-	delay(1000);
+	delay(250);
 }
