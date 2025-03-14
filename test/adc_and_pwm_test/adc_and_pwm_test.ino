@@ -1,15 +1,15 @@
 #include <SPI.h>
 
-#define VREF 5.0 // reference votlage for ADC
+#define VREF 5.0  // reference votlage for ADC
 
 // SPI stuff
-#define SPI_CS D10 // CS pin for MCP3313
+#define SPI_CS D10  // CS pin for MCP3313
 SPISettings adcsettings(1000000, MSBFIRST, SPI_MODE0);
 
 
 // PWM stuff
-#define PWM D3	// Potentiostat PWM Pin
-#define PWM_PERIOD_MS 1000 // period in ms.
+#define PWM D3               // Potentiostat PWM Pin
+#define PWM_PERIOD_MS 10000  // period in ms.
 
 void setup() {
   // put your setup code here, to run once:
@@ -31,18 +31,20 @@ unsigned long previous_t_millis = 0;
 bool pwm_state = LOW;
 
 void pwm() {
-	unsigned long current_t_millis = millis();
-	if (current_t_millis - previous_t_millis >= PWM_PERIOD_MS / 2) {
-		previous_t_millis = current_t_millis;
-		pwm_state =! pwm_state;
-		digitalWrite(PWM, pwm_state);
-	}
+  // digitalWrite(PWM, HIGH);
+
+  unsigned long current_t_millis = millis();
+  if (current_t_millis - previous_t_millis >= PWM_PERIOD_MS / 2) {
+      previous_t_millis = current_t_millis;
+      pwm_state =! pwm_state;
+      digitalWrite(PWM, pwm_state);
+  }
 }
 
 
 void loop() {
 
-  pwm(); // start PWM. it will always be running for now
+  pwm();  // start PWM. it will always be running for now
 
   SPI.beginTransaction(adcsettings);
   digitalWrite(SPI_CS, LOW);
@@ -57,11 +59,10 @@ void loop() {
 
   float adc_v = (adc_val / 65536.0) * VREF;
 
-  Serial.printf("ADC value: %d ", adc_val);
-  Serial.print("ADC value (V): ");
-  Serial.print(adc_v, 3); 
-  Serial.println();
+  // Serial.printf("ADC value: %d ", adc_val);
+  Serial.println(adc_val);
+
   // Serial.printf("high bit: %d ", highByte);
   // Serial.printf("low bit: %d ", lowByte);
-  delay(1000);
+  delay(1); // 1khz sampling rate
 }

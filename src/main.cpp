@@ -290,19 +290,26 @@ void setup() {
 			digitalWrite(LED_3, HIGH);
 			for (;;); // Halt execution
 		}
+		digitalWrite(LED_1, HIGH);
+		digitalWrite(LED_2, HIGH);
+		digitalWrite(LED_3, LOW);
 		drawBoot();
 	}
-
-	// Setup SPI
-	pinMode(SPI_CS, OUTPUT);
-	digitalWrite(SPI_CS, HIGH);
-	SPI.begin();
 
 	// Setup Temperature Sensor
 	pinMode(TEMP_PIN, INPUT);
 
 	// Setup Potentiostat
 	pinMode(POTENT_PIN, OUTPUT);
+
+	// Setup SPI
+	pinMode(SPI_CS, OUTPUT);
+	digitalWrite(SPI_CS, HIGH);
+	SPI.begin();
+
+	digitalWrite(LED_1, LOW);
+	digitalWrite(LED_2, HIGH);
+	digitalWrite(LED_3, HIGH);
 
 	// Setup PD_EN
 	analogWrite(PD_PIN, 4095);
@@ -347,6 +354,10 @@ void setup() {
 	// Start Main Service
 	mainService->start();
 
+	digitalWrite(LED_1, LOW);
+	digitalWrite(LED_2, LOW);
+	digitalWrite(LED_3, HIGH);
+
 	// Setup Dev Service
 	BLEService *devService = pServer->createService(DEVSERVICE_UUID);
 
@@ -375,6 +386,10 @@ void setup() {
 	pAdvertising->setMinPreferred(0x06);  // functions that help with iPhone connections issue
 	pAdvertising->setMinPreferred(0x12);
 	BLEDevice::startAdvertising();
+
+	digitalWrite(LED_1, HIGH);
+	digitalWrite(LED_2, LOW);
+	digitalWrite(LED_3, LOW);
 
 	// Setup Buttons
 	pinMode(SW1, INPUT);
@@ -424,7 +439,7 @@ void update_pwm() {
 	// Check if switch is needed
 	if (current_t_millis - previous_t_millis >= PWM_PERIOD_MS / 2) {
 		previous_t_millis = current_t_millis;
-		pwm_state != pwm_state;
+		pwm_state =! pwm_state;
 		// Update state
 		digitalWrite(POTENT_PIN, pwm_state ? HIGH : LOW);
 		pwmCharacteristic->setValue(pwm_state ? "1" : "0");
