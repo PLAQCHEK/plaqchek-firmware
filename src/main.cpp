@@ -17,7 +17,7 @@
 
 #define OLED_RESET -1	// Reset pin; -1 if sharing Arduino reset pin
 
-#define SCREEN_ADDRESS 0x3D	// 0x3C-0x3D, based on jumpers
+#define SCREEN_ADDRESS 0x3D	// 0x3D, based on jumpers
 Adafruit_SSD1306 display = Adafruit_SSD1306(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 // PLAQCHEK Logo : 74x64px
@@ -240,12 +240,12 @@ void drawUI() {
 	display.clearDisplay();
 
 	display.setTextSize(1);    
-	display.setTextColor(SSD1306_WHITE);
+	display.setTextColor(WHITE);
 
 	// Display Title
 	display.setCursor(0, 0);
 	display.println("PLAQCHEK");
-	display.drawLine(0, 10, SCREEN_WIDTH, 10, SSD1306_WHITE);  // Divider line
+	display.drawLine(0, 10, SCREEN_WIDTH, 10, WHITE);  // Divider line
 
 	// BLE Connection Icon
 	if (is_connected) {
@@ -273,7 +273,7 @@ void drawUI() {
 		drawProgress();
 	} else {
 		display.setCursor(0, 15);
-		display.printf("Pred Lp-PLA2 Conc: %.2f ng/mL\r\n", lppla2_value);
+		display.printf("LpPLA2 Conc: %.2f ng/mL\r\n", lppla2_value);
 		display.setCursor(0, 25);
 		display.printf("Risk Level: %s\r\n", lppla2_value > 200 ? "POS" : "NEG");
 		// Maybe some icon here
@@ -505,6 +505,7 @@ void read_adc() {
     SPI.endTransaction();
 
 	// Update Exact
+	Serial.printf("%u\n", adc_val);
 	adcCharacteristic->setValue(adc_val);
 	adcCharacteristic->notify();
 }
