@@ -135,7 +135,8 @@ BLECharacteristic *adcCharacteristic,	// ADC Data
 bool is_connected = false;	// Connection status
 
 /* Data Parameters */
-#define DATA_SAMPLES 10000
+#define DATA_SAMPLES 1000
+float dark_ref_value = 0.0f; // Dark ref value
 float lppla2_value = 0.0f;	// Lp-PLA2 value in ppm
 String status_value = "";	// Status of sample
 uint16_t progress_value = 0; 	// Progress value in %
@@ -226,7 +227,7 @@ void drawProgress() {
 	display.drawRect(0, SCREEN_HEIGHT - 7, SCREEN_WIDTH, 7, WHITE);
 
 	// Draw Fill
-	display.fillRect(1, SCREEN_HEIGHT - 6, (SCREEN_WIDTH - 2) * (progress_value / 100), 5, WHITE);
+	display.fillRect(1, SCREEN_HEIGHT - 6, ((SCREEN_WIDTH - 2) * progress_value) / 100, 5, WHITE);
 }
 
 /**
@@ -511,22 +512,56 @@ void read_adc() {
 }
 
 /**
+ * Calculate Dark Ref
+ */
+void calculateDarkRef() {
+	uint32_t dark_sum = 0;
+
+	for (uint8_t i = 0; i < DATA_SAMPLES; i++) {
+		dark_sum += ref_data[i];
+	}
+
+	dark_ref_value = ((float) dark_sum / DATA_SAMPLES);
+}
+
+/**
+ * Calculate Lp-PLA2 Conc
+ */
+void calculateLPPLA2() {
+	uint32_t sum = 0;
+
+	for (uint8_t i = 0; i < DATA_SAMPLES; i++) {
+		sum += reading_data[i];
+	}
+
+	lppla2_value = 300.0 * (((float) sum / DATA_SAMPLES) - dark_ref_value) / ADC_RES; // BS formula for now
+
+	// Negative check
+	if (lppla2_value < 0.0f) {
+		lppla2_value = 0.0f;
+	}
+}
+
+/**
  * Runs the reference aquiring step
  */
 void run_ref_state() {
 	// If start
 	if (!adc_state) {
+		Serial.println("start ref read");
 		toggle_adc(true);
 		counter = 0;
 		progress_value = 0;
 	// If progressing
 	} else if (counter < DATA_SAMPLES) {
+		Serial.printf("ref reading #%u\n", counter);
 		read_adc();
 		ref_data[counter] = adc_state;
 		counter++;
-		progress_value = (counter / DATA_SAMPLES) * 100;
+		progress_value = (counter * 100) / DATA_SAMPLES;
 	// Finishing
 	} else {
+		Serial.println("end ref read");
 		toggle_adc(false);
 		reference_done = true;
 		progress_value = 100;
@@ -543,6 +578,7 @@ void run_ref_state() {
 void run_sample_state() {
 	// Start if needed
 	if (!adc_state) {
+		Serial.println("start read");
 		toggle_adc(true);
 		counter = 0;
 		progress_value = 0;
@@ -555,15 +591,18 @@ void run_sample_state() {
 
 	// If finishing
 	if (counter >= DATA_SAMPLES) {
+		Serial.println("end read");
 		toggle_adc(false);
-		reference_done = true;
+		reading_done = true;
+		lppla2_value = 
 		progress_value = 100;
 	// If progressing
 	} else if (pwm_state) {
+		Serial.printf("ref reading #%u\n", counter);
 		read_adc();
 		reading_data[counter] = adc_state;
 		counter++;
-		progress_value = (counter / DATA_SAMPLES) * 100;
+		progress_value = (counter * 100) / DATA_SAMPLES;
 	} 
 
 	// Progress Notify
