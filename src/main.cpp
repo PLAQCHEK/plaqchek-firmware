@@ -82,7 +82,6 @@ const SPISettings adc_settings = SPISettings(spi_clk_rate, MSBFIRST, SPI_MODE0);
 #define VREF 5.0 // reference votlage for ADC
 #define ADC_RES 65536.0	// Resolution for the ADC
 uint16_t adc_val = 0;	// Latest ADC Value
-float exact_adc_val = 0.0f;	// Exact Voltage from ADC
 
 /* LED Pins */
 #define LED_1 D7	// LED 1
@@ -90,9 +89,9 @@ float exact_adc_val = 0.0f;	// Exact Voltage from ADC
 #define LED_3 D9	// LED 3
 
 /* SW Pins */
-#define SW1 A2
-#define SW2 A0
-#define SW3 A1
+#define SW1 A2	// REF
+#define SW2 A0	// RESET
+#define SW3 A1	// START
 bool sw1_state = LOW;
 bool sw2_state = LOW;
 bool sw3_state = LOW;
@@ -108,6 +107,7 @@ bool pwm_state = false;	// Current state of PWM
 
 /* Power Delivery */
 #define PD_PIN A7	// PD_EN Pin
+bool adc_state = false;	// PD State
 
 /* BLE */
 #define DEVICE_NAME "PLAQCHEK"	// Device Name to use on BLE connection
@@ -135,9 +135,13 @@ BLECharacteristic *adcCharacteristic,	// ADC Data
 bool is_connected = false;	// Connection status
 
 /* Data Parameters */
+#define DATA_SAMPLES 10000
 float lppla2_value = 0.0f;	// Lp-PLA2 value in ppm
 String status_value = "";	// Status of sample
-u_int16_t progress_value = 0; 	// Progress value in %
+uint16_t progress_value = 0; 	// Progress value in %
+uint16_t counter = 0;	// Tracking Data Aquisition
+uint16_t ref_data[DATA_SAMPLES];	// Reference Data
+uint16_t reading_data[DATA_SAMPLES];	// Reading Data
 
 /* UI Parameters */
 bool start_ref = false;
@@ -215,6 +219,17 @@ void drawBoot() {
 }
 
 /**
+ * Draw Progress Bar
+ */
+void drawProgress() {
+	// Draw Boundary
+	display.drawRect(0, SCREEN_HEIGHT - 7, SCREEN_WIDTH, 7, WHITE);
+
+	// Draw Fill
+	display.fillRect(1, SCREEN_HEIGHT - 6, (SCREEN_WIDTH - 2) * (progress_value / 100), 5, WHITE);
+}
+
+/**
  * Draw the current UI
  * 
  * Note: Letters take up 7x5 pixels with 1 pixel spacing and 1 pixel spacing 
@@ -244,12 +259,18 @@ void drawUI() {
 	} else if (!reference_done) {
 		display.setCursor(0, 15);
 		display.println("Reading dark\nreference...");
+		display.setCursor(0, 35);
+		display.printf("ADC Value: %u", adc_val);
+		drawProgress();
 	} else if (!started) {
 		display.setCursor(0, 15);
 		display.println("Dark reference set!\nClick START to begin");
 	} else if (!reading_done) {
 		display.setCursor(0, 15);
 		display.println("Reading...");
+		display.setCursor(0, 35);
+		display.printf("ADC Value: %u", adc_val);
+		drawProgress();
 	} else {
 		display.setCursor(0, 15);
 		display.printf("Pred Lp-PLA2 Conc: %.2f ng/mL\r\n", lppla2_value);
@@ -272,7 +293,7 @@ void setup() {
 	pinMode(LED_2, OUTPUT);
 	pinMode(LED_3, OUTPUT);
 
-	// Booting Lights
+	// Booting Lights Initial
 	digitalWrite(LED_1, HIGH);
 	digitalWrite(LED_2, HIGH);
 	digitalWrite(LED_3, HIGH);
@@ -290,6 +311,8 @@ void setup() {
 			digitalWrite(LED_3, HIGH);
 			for (;;); // Halt execution
 		}
+
+		// Boot Success
 		digitalWrite(LED_1, HIGH);
 		digitalWrite(LED_2, HIGH);
 		digitalWrite(LED_3, LOW);
@@ -301,17 +324,20 @@ void setup() {
 
 	// Setup Potentiostat
 	pinMode(POTENT_PIN, OUTPUT);
+	digitalWrite(POTENT_PIN, LOW);
 
 	// Setup SPI
 	pinMode(SPI_CS, OUTPUT);
 	digitalWrite(SPI_CS, HIGH);
 	SPI.begin();
 
+	// SPI Success
 	digitalWrite(LED_1, LOW);
 	digitalWrite(LED_2, HIGH);
 	digitalWrite(LED_3, HIGH);
 
 	// Setup PD_EN
+	pinMode(PD_PIN, OUTPUT);
 	analogWrite(PD_PIN, 4095);
 
 	// Setup BLE
@@ -343,7 +369,7 @@ void setup() {
 											BLECharacteristic::PROPERTY_READ |		
                         					BLECharacteristic::PROPERTY_NOTIFY
 										);
-	progressCharacteristic->setValue("");
+	progressCharacteristic->setValue(progress_value);
 
 	startCharacteristic = mainService->createCharacteristic(
 											START_UUID,
@@ -354,6 +380,7 @@ void setup() {
 	// Start Main Service
 	mainService->start();
 
+	// BLE Service Start
 	digitalWrite(LED_1, LOW);
 	digitalWrite(LED_2, LOW);
 	digitalWrite(LED_3, HIGH);
@@ -387,6 +414,7 @@ void setup() {
 	pAdvertising->setMinPreferred(0x12);
 	BLEDevice::startAdvertising();
 
+	// Advertising Start
 	digitalWrite(LED_1, HIGH);
 	digitalWrite(LED_2, LOW);
 	digitalWrite(LED_3, LOW);
@@ -436,15 +464,25 @@ void update_states() {
 void update_pwm() {
 	// Get Current Time
 	unsigned long current_t_millis = millis();
+
 	// Check if switch is needed
 	if (current_t_millis - previous_t_millis >= PWM_PERIOD_MS / 2) {
 		previous_t_millis = current_t_millis;
 		pwm_state =! pwm_state;
+
 		// Update state
 		digitalWrite(POTENT_PIN, pwm_state ? HIGH : LOW);
 		pwmCharacteristic->setValue(pwm_state ? "1" : "0");
 		pwmCharacteristic->notify();
 	}
+}
+
+/**
+ * Toggle the ADC
+ */
+void toggle_adc(bool state) {
+	adc_state = state;
+	analogWrite(PD_PIN, adc_state ? 4095 : 0);
 }
 
 /**
@@ -469,7 +507,67 @@ void read_adc() {
 	// Update Exact
 	adcCharacteristic->setValue(adc_val);
 	adcCharacteristic->notify();
-	exact_adc_val = (adc_val / ADC_RES) * VREF;
+}
+
+/**
+ * Runs the reference aquiring step
+ */
+void run_ref_state() {
+	// If start
+	if (!adc_state) {
+		toggle_adc(true);
+		counter = 0;
+		progress_value = 0;
+	// If progressing
+	} else if (counter < DATA_SAMPLES) {
+		read_adc();
+		ref_data[counter] = adc_state;
+		counter++;
+		progress_value = (counter / DATA_SAMPLES) * 100;
+	// Finishing
+	} else {
+		toggle_adc(false);
+		reference_done = true;
+		progress_value = 100;
+	}
+
+	// Progress Notify
+	progressCharacteristic->setValue(progress_value);
+	progressCharacteristic->notify();
+}
+
+/**
+ * Runs the sample reading step
+ */
+void run_sample_state() {
+	// Start if needed
+	if (!adc_state) {
+		toggle_adc(true);
+		counter = 0;
+		progress_value = 0;
+		pwm_state = false;
+		previous_t_millis = millis();
+	}
+
+	// Run PWM
+	update_pwm();
+
+	// If finishing
+	if (counter >= DATA_SAMPLES) {
+		toggle_adc(false);
+		reference_done = true;
+		progress_value = 100;
+	// If progressing
+	} else if (pwm_state) {
+		read_adc();
+		reading_data[counter] = adc_state;
+		counter++;
+		progress_value = (counter / DATA_SAMPLES) * 100;
+	} 
+
+	// Progress Notify
+	progressCharacteristic->setValue(progress_value);
+	progressCharacteristic->notify();
 }
 
 /**
@@ -479,14 +577,14 @@ void loop() {
 	// Update Buttons
 	update_states();
 
-	// Update PWM
-	update_pwm();
-
-	// Update ADC
-	read_adc();
-
-	// Logging
-	Serial.printf("%d\n", adc_val);
+	// Run states
+	// Read Dark Reference
+	if(start_ref && !reference_done) {
+		run_ref_state();
+	// Read Sample
+	} else if (started && !reading_done) {
+		run_sample_state();
+	}
 
 	// Update UI
 	if (DISPLAY_ATTACHED)
