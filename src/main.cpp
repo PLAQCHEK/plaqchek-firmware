@@ -357,7 +357,7 @@ void setup() {
 											BLECharacteristic::PROPERTY_READ |		
                         					BLECharacteristic::PROPERTY_NOTIFY
 										);
-	lpPLA2Characteristic->setValue("");
+	lpPLA2Characteristic->setValue(lppla2_value);
 
 	statusCharacteristic = mainService->createCharacteristic(
 											STATUS_UUID,
@@ -517,11 +517,14 @@ void read_adc() {
 void calculateDarkRef() {
 	uint32_t dark_sum = 0;
 
-	for (uint8_t i = 0; i < DATA_SAMPLES; i++) {
+	for (uint16_t i = 0; i < DATA_SAMPLES; i++) {
+		Serial.printf("%u\n", i);
 		dark_sum += ref_data[i];
 	}
 
 	dark_ref_value = ((float) dark_sum / DATA_SAMPLES);
+
+	Serial.println("dark ref calculated");
 }
 
 /**
@@ -530,7 +533,7 @@ void calculateDarkRef() {
 void calculateLPPLA2() {
 	uint32_t sum = 0;
 
-	for (uint8_t i = 0; i < DATA_SAMPLES; i++) {
+	for (uint16_t i = 0; i < DATA_SAMPLES; i++) {
 		sum += reading_data[i];
 	}
 
@@ -540,6 +543,13 @@ void calculateLPPLA2() {
 	if (lppla2_value < 0.0f) {
 		lppla2_value = 0.0f;
 	}
+
+	// Progress Notify
+	lpPLA2Characteristic->setValue(lppla2_value);
+	statusCharacteristic->setValue(lppla2_value > 200 ? "POS" : "NEG");
+	lpPLA2Characteristic->notify();
+
+	Serial.println("lppla2 conc calculated");
 }
 
 /**
@@ -565,6 +575,7 @@ void run_ref_state() {
 		toggle_adc(false);
 		reference_done = true;
 		progress_value = 100;
+		calculateDarkRef();
 	}
 
 	// Progress Notify
@@ -596,6 +607,7 @@ void run_sample_state() {
 		reading_done = true;
 		lppla2_value = 
 		progress_value = 100;
+		calculateLPPLA2();
 	// If progressing
 	} else if (pwm_state) {
 		Serial.printf("ref reading #%u\n", counter);
