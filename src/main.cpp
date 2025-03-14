@@ -451,12 +451,15 @@ void update_states() {
 	// Update State
 	if (!start_ref && sw1_state == HIGH) { // Started reference reading
 		start_ref = true;
-	} else if (!started && sw3_state == HIGH) { // Started reading
+	} else if (reference_done && !started && sw3_state == HIGH) { // Started reading
 		started = true;
 	} else if (reading_done && sw2_state == HIGH) { // Reset current reading
 		started = false;
 		reading_done = false;
-	} 
+	} else if (reference_done && !started && sw2_state == HIGH) { // Started reading
+		start_ref = false;
+		reference_done = false;
+	}
 }
 
 /**
@@ -469,7 +472,7 @@ void update_pwm() {
 	// Check if switch is needed
 	if (current_t_millis - previous_t_millis >= PWM_PERIOD_MS / 2) {
 		previous_t_millis = current_t_millis;
-		pwm_state =! pwm_state;
+		pwm_state = !pwm_state;
 
 		// Update state
 		digitalWrite(POTENT_PIN, pwm_state ? HIGH : LOW);
