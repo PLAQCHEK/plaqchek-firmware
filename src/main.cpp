@@ -20,9 +20,13 @@
 #define SCREEN_ADDRESS 0x3D	// 0x3D, based on jumpers
 Adafruit_SSD1306 display = Adafruit_SSD1306(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
-// PLAQCHEK Logo : 74x64px
+/* ICONS */
 #define LOGO_WIDTH 74
 #define LOGO_HEIGHT 64
+#define INDICATOR_WIDTH 7
+#define INDICATOR_HEIGHT 7
+
+// PLAQCHEK Logo : 74x64px
 const unsigned char logo_bitmap [] PROGMEM = {
 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
@@ -67,10 +71,18 @@ const unsigned char logo_bitmap [] PROGMEM = {
 };
 
 // BLE Logo : 7x7px
-#define BLE_LOGO_WIDTH 7
-#define BLE_LOGO_HEIGHT 7
 const unsigned char ble_logo [] PROGMEM = {
 	0x18, 0x94, 0x52, 0x2c, 0x52, 0x94, 0x18
+};
+
+// Photodiode Logo : 7x7px
+const unsigned char diode_logo [] PROGMEM = {
+	0x44, 0x64, 0x74, 0xfe, 0x74, 0x64, 0x44
+};
+
+// Electrode Logo : 7x7px
+const unsigned char electrode_logo [] PROGMEM = {
+	0x3e, 0x7c, 0xf0, 0x7e, 0x1c, 0x30, 0x40
 };
 
 /* SPI */
@@ -135,9 +147,9 @@ BLECharacteristic *adcCharacteristic,	// ADC Data
 bool is_connected = false;	// Connection status
 
 /* Data Parameters */
-#define DATA_SAMPLES 1000
+#define DATA_SAMPLES 2000
 float dark_ref_value = 0.0f; // Dark ref value
-float lppla2_value = 0.0f;	// Lp-PLA2 value in ppm
+float lppla2_value = 0.0f;	// Lp-PLA2 value in ng/mL
 String status_value = "";	// Status of sample
 uint16_t progress_value = 0; 	// Progress value in %
 uint16_t counter = 0;	// Tracking Data Aquisition
@@ -157,12 +169,12 @@ bool reading_done = false;
 
 // BLECallback for handling successful connections
 class BLECallback : public BLEServerCallbacks {
-	void onConnect(BLEServer* pServer) {
+	void onConnect(BLEServer* pServer) override {
 		Serial.println("Device Connected!");
 		is_connected = true;
 		BLEDevice::stopAdvertising();
 	}
-	void onDisconnect(BLEServer* pServer) {
+	void onDisconnect(BLEServer* pServer) override {
 		Serial.println("Device Disconnected!");
 		is_connected = false;
 		BLEDevice::startAdvertising();
@@ -171,7 +183,7 @@ class BLECallback : public BLEServerCallbacks {
 
 // BLE Start Service Callback
 class BLEStartCallback: public BLECharacteristicCallbacks {
-	void onWrite(BLECharacteristic *pCharacteristic) {
+	void onWrite(BLECharacteristic *pCharacteristic) override {
 		std::string value = pCharacteristic->getValue();
 
 		// Just print the received msg
@@ -248,9 +260,18 @@ void drawUI() {
 	display.println("PLAQCHEK");
 	display.drawLine(0, 10, SCREEN_WIDTH, 10, WHITE);  // Divider line
 
+	// Indicators
 	// BLE Connection Icon
 	if (is_connected) {
-		display.drawBitmap(SCREEN_WIDTH - BLE_LOGO_WIDTH, 0, ble_logo, BLE_LOGO_WIDTH, BLE_LOGO_HEIGHT, WHITE);
+		display.drawBitmap(SCREEN_WIDTH - INDICATOR_WIDTH, 0, ble_logo, INDICATOR_WIDTH, INDICATOR_HEIGHT, WHITE);
+	}
+	// Diode On Icon
+	if (adc_state) {
+		display.drawBitmap(SCREEN_WIDTH - (2*INDICATOR_WIDTH + 1), 0, diode_logo, INDICATOR_WIDTH, INDICATOR_HEIGHT, WHITE);
+	}
+	// PWM On Icon
+	if (pwm_state) {
+		display.drawBitmap(SCREEN_WIDTH - (3*INDICATOR_WIDTH + 2), 0, electrode_logo, INDICATOR_WIDTH, INDICATOR_HEIGHT, WHITE);
 	}
   
 	// Different States
@@ -266,6 +287,8 @@ void drawUI() {
 	} else if (!started) {
 		display.setCursor(0, 15);
 		display.println("Dark reference set!\nClick START to begin");
+		display.setCursor(0, 35);
+		display.println("Click REF and RESET\nto redo reference");
 	} else if (!reading_done) {
 		display.setCursor(0, 15);
 		display.println("Reading...");
@@ -275,10 +298,10 @@ void drawUI() {
 	} else {
 		display.setCursor(0, 15);
 		display.printf("LpPLA2 Conc: %.2f ng/mL\r\n", lppla2_value);
-		display.setCursor(0, 25);
+		display.setCursor(0, 35);
 		display.printf("Risk Level: %s\r\n", lppla2_value > 200 ? "POS" : "NEG");
 		// Maybe some icon here
-		display.setCursor(0, 35);
+		display.setCursor(0, 45);
 		display.println("Reset to start again");
 	}
 
@@ -456,7 +479,7 @@ void update_states() {
 	} else if (reading_done && sw2_state == HIGH) { // Reset current reading
 		started = false;
 		reading_done = false;
-	} else if (reference_done && !started && sw2_state == HIGH) { // Started reading
+	} else if (reference_done && !started && sw2_state == HIGH && sw1_state == HIGH) { // Hard Reset
 		start_ref = false;
 		reference_done = false;
 	}
@@ -540,7 +563,7 @@ void calculateLPPLA2() {
 		sum += reading_data[i];
 	}
 
-	lppla2_value = 300.0 * (((float) sum / DATA_SAMPLES) - dark_ref_value) / ADC_RES; // BS formula for now
+	lppla2_value = -0.0456 * (((float) sum / DATA_SAMPLES) - dark_ref_value) + 252.679; // Calibration Curve
 
 	// Negative check
 	if (lppla2_value < 0.0f) {
@@ -608,11 +631,10 @@ void run_sample_state() {
 		Serial.println("end read");
 		toggle_adc(false);
 		reading_done = true;
-		lppla2_value = 
 		progress_value = 100;
 		calculateLPPLA2();
 	// If progressing
-	} else if (pwm_state) {
+	} else {
 		Serial.printf("ref reading #%u\n", counter);
 		read_adc();
 		reading_data[counter] = adc_state;
