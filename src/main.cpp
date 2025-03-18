@@ -88,7 +88,7 @@ const unsigned char electrode_logo [] PROGMEM = {
 /* SPI */
 #define SPI_CS D10	// SPI Chip Select
 
-const u_int spi_clk_rate = 1*10^6;	// Clock Rate (100 MHz, but test with 1 MHz)
+const u_int spi_clk_rate = 1*10^6;	// Clock Rate (1 MHz, but test with 1 MHz)
 const SPISettings adc_settings = SPISettings(spi_clk_rate, MSBFIRST, SPI_MODE0);	// SPI Settings
 
 #define VREF 5.0 // reference votlage for ADC
@@ -563,7 +563,7 @@ void calculateLPPLA2() {
 		sum += reading_data[i];
 	}
 
-	lppla2_value = -0.0456 * (((float) sum / DATA_SAMPLES) - dark_ref_value) + 252.679; // Calibration Curve
+	lppla2_value = -0.0538 * (((float) sum / DATA_SAMPLES) - dark_ref_value) + 295.63; // Calibration Curve
 
 	// Negative check
 	if (lppla2_value < 0.0f) {
@@ -590,7 +590,6 @@ void run_ref_state() {
 		progress_value = 0;
 	// If progressing
 	} else if (counter < DATA_SAMPLES) {
-		Serial.printf("ref reading #%u\n", counter);
 		read_adc();
 		ref_data[counter] = adc_state;
 		counter++;
@@ -635,7 +634,6 @@ void run_sample_state() {
 		calculateLPPLA2();
 	// If progressing
 	} else {
-		Serial.printf("ref reading #%u\n", counter);
 		read_adc();
 		reading_data[counter] = adc_state;
 		counter++;
@@ -651,9 +649,6 @@ void run_sample_state() {
  * Loop
  */
 void loop() {
-	// Update Buttons
-	update_states();
-
 	// Run states
 	// Read Dark Reference
 	if(start_ref && !reference_done) {
@@ -661,6 +656,9 @@ void loop() {
 	// Read Sample
 	} else if (started && !reading_done) {
 		run_sample_state();
+	// Update Buttons
+	} else {
+		update_states();
 	}
 
 	// Update UI
