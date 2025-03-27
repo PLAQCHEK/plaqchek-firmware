@@ -88,8 +88,8 @@ const unsigned char electrode_logo [] PROGMEM = {
 /* SPI */
 #define SPI_CS D10	// SPI Chip Select
 
-const u_int spi_clk_rate = 1*10^6;	// Clock Rate (1 MHz, but test with 1 MHz)
-const SPISettings adc_settings = SPISettings(spi_clk_rate, MSBFIRST, SPI_MODE0);	// SPI Settings
+const u_int spi_clk_rate = 1000000;	// Clock Rate (1 MHz, but test with 1 MHz)
+const SPISettings adc_settings(spi_clk_rate, MSBFIRST, SPI_MODE0);	// SPI Settings
 
 #define VREF 5.0 // reference votlage for ADC
 #define ADC_RES 65536.0	// Resolution for the ADC
@@ -113,7 +113,7 @@ bool sw3_state = LOW;
 
 /* Potentiostat Sensor */
 #define POTENT_PIN D3	// Potentiostat PWM Pin
-#define PWM_PERIOD_MS 1000	// Period in ms.
+#define PWM_PERIOD_MS 10000	// Period in ms.
 unsigned long previous_t_millis = 0;	// For time tracking
 bool pwm_state = false;	// Current state of PWM
 
@@ -361,8 +361,7 @@ void setup() {
 	digitalWrite(LED_3, HIGH);
 
 	// Setup PD_EN
-	pinMode(PD_PIN, OUTPUT);
-	analogWrite(PD_PIN, 4095);
+	pinMode(PD_PIN, INPUT);
 
 	// Setup BLE
 	BLEDevice::init(DEVICE_NAME);
@@ -509,7 +508,10 @@ void update_pwm() {
  */
 void toggle_adc(bool state) {
 	adc_state = state;
-	analogWrite(PD_PIN, adc_state ? 4095 : 0);
+	pinMode(PD_PIN, adc_state ? OUTPUT : INPUT);
+	if (adc_state) {
+		analogWrite(PD_PIN, 4095);
+	}
 }
 
 /**
@@ -524,7 +526,7 @@ void read_adc() {
 	delayMicroseconds(100);
 
     // Read ADC
-    adc_val = SPI.transfer16(0x00);
+    adc_val = SPI.transfer16(0);
 	delayMicroseconds(100);
 
 	// Terminate Transaction
@@ -532,7 +534,7 @@ void read_adc() {
     SPI.endTransaction();
 
 	// Update Exact
-	Serial.printf("%u\n", adc_val);
+	Serial.printf("ADC: %u\n", adc_val);
 	adcCharacteristic->setValue(adc_val);
 	adcCharacteristic->notify();
 }
@@ -544,7 +546,6 @@ void calculateDarkRef() {
 	uint32_t dark_sum = 0;
 
 	for (uint16_t i = 0; i < DATA_SAMPLES; i++) {
-		Serial.printf("%u\n", i);
 		dark_sum += ref_data[i];
 	}
 
